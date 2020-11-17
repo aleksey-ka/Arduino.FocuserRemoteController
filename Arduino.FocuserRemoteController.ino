@@ -1,72 +1,91 @@
 // Copyright (C) 2020 Aleksey Kalyuzhny. Released under the terms of the
 // GNU General Public License version 3. See <http://www.gnu.org/licenses/>
 
-class Focuser {
+#include <Stepper.h>
+
+class MyFocuser {
 public:
   void begin()
   {
     pos = 0;
-    speed = 5;
+    stepper.setSpeed( 5 );
   }
 
-  int getSpeed() const { return speed; }
-  void setSpeed( int newValue ) { speed = newValue; }
+  void setSpeed( int newValue ) { stepper.setSpeed( newValue ); }
+
+  void stepForward( int steps ) { stepper.step( steps ); pos += steps; }
+  void stepBackward( int steps ) { stepper.step( -steps ); pos -= steps; }
   
 private:
   int pos = 0;
-  int speed = 5;
-};
+  const int stepsPerMotorRotation = 2048;
+  Stepper stepper = Stepper( stepsPerMotorRotation, 2, 4, 3, 5 );
+} myFocuser;
 
-Focuser focuser;
-
-const String ACK = "ACK";
-const String SPEED = "SPEED ";
 const String RESET = "RESET";
+const String ON = "ON";
+const String OFF = "OFF";
+const String SPEED = "SPEED ";
+const String FWD = "FWD ";
+const String BWD = "BWD ";
+const String OK = "OK ";
 
-void setup() {
-  // Initialize serial port communication at 9600 baud
-  Serial.begin( 9600 );
-
-  focuser.begin();
-
-  pinMode( LED_BUILTIN, OUTPUT );
-
-  Serial.println( RESET );
-}
-
-String checkCommand(){
-  static String commandBuffer;
+String fetchLineFromSerial()
+{
+  static String lineBuffer;
   
   while( Serial.available() ) {
-    if( commandBuffer.length() == 0 ) {
-      commandBuffer.reserve( 100 );
+    if( lineBuffer.length() == 0 ) {
+      lineBuffer.reserve( 100 );
     }
     char ch = (char)Serial.read();
     if( ch == '\n' ) {
-      String command = commandBuffer;
-      commandBuffer = "";
-      return command;
+      String line = lineBuffer;
+      lineBuffer = "";
+      return line;
     }
-    commandBuffer += ch;
+    lineBuffer += ch;
   }
   return String();
 }
 
-void loop() {
-  String command = checkCommand();
-  if( command.length() > 0 ) {
-    if( command.equals( "ON" ) ) {
-      digitalWrite(LED_BUILTIN, HIGH);
-      Serial.println( ACK );
-    } else if( command.equals( "OFF" ) ) {
-      digitalWrite(LED_BUILTIN, LOW);
-      Serial.println( ACK );
-    } else if( command.startsWith( SPEED ) ) {
-      digitalWrite(LED_BUILTIN, LOW);
-      Serial.println( ACK + ' ' + command + String( focuser.getSpeed() ) );
+void setup() {
+  // Initialize serial port communication at 9600 baud
+  Serial.begin( 9600 );
+  // Using built-in LED for debugging and motor power on/off
+  pinMode( LED_BUILTIN, OUTPUT );
+  // Initialize the focuser
+  myFocuser.begin();
+  // Notify the controlling application that the focuser has been reset
+  Serial.println( RESET );
+}
+
+void loop()
+{
+  String line = fetchLineFromSerial();
+  if( line.length() > 0 ) {
+    if( line.equals( ON ) ) {
+      digitalWrite( LED_BUILTIN, HIGH );
+      Serial.println( OK + line );
+    } else if( line.equals( OFF ) ) {
+      digitalWrite( LED_BUILTIN, LOW );
+      Serial.println( OK + line );
+    } else if( line.startsWith( SPEED ) ) {
+      myFocuser.setSpeed( 10 );
+      Serial.println( OK + line );
+    } else if( line.startsWith( FWD ) ) {
+      digitalWrite( LED_BUILTIN, HIGH );
+      myFocuser.stepForward( 100 );
+      digitalWrite( LED_BUILTIN, LOW );
+      Serial.println( OK + line );
+    } else if( line.startsWith( BWD ) ) {
+      digitalWrite( LED_BUILTIN, HIGH );
+      myFocuser.stepBackward( 100 );
+      digitalWrite( LED_BUILTIN, LOW );
+      Serial.println( OK + line );
     } else {
-      Serial.println( "UNKNOWN " + command );
+      Serial.println( "UNRECOGNIZED COMMAND " + line );
     }
-    command = "";
+    line = "";
   }
 }
