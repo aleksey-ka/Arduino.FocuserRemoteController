@@ -50,18 +50,18 @@ class LowPowerStepper {
       zeroPos = pos;
     }
 
-    int getPos() const
+    long getPos() const
     {
       if( pos >= zeroPos ) {
-        return (int)( pos - zeroPos );
+        return (long)( pos - zeroPos );
       } else {
-        return -(int)( zeroPos - pos );
+        return -(long)( zeroPos - pos );
       }
     }
 
   private:
-    unsigned int pos = 0;
-    unsigned int zeroPos = 0;
+    unsigned long pos = 0;
+    unsigned long zeroPos = 0;
     
     int motor_pin_1;
     int motor_pin_2;
@@ -96,12 +96,14 @@ class LowPowerStepper {
 };
 
 LowPowerStepper focuserMotor;
-const int timePerStep = 6000; // microseconds
+const int timePerStep = 4000; // microseconds
 
 const String RESET = "RESET";
 const String FWD = "FWD ";
 const String BWD = "BWD ";
 const String POS = "POS ";
+const String UNRECOGNIZED_COMMAND = "UNRECOGNIZED COMMAND ";
+const String INVALID_ARGS = "INVALID ARGS ";
 
 String fetchLineFromSerial()
 {
@@ -126,7 +128,9 @@ String getCommandArgs( String command )
 {
   int pos = command.indexOf( ' ' );
   if( pos != -1 ) {
-    return command.substring( pos  + 1 );
+    String result = command.substring( pos  + 1 );
+    result.trim();
+    return result;
   }
   return "";
 }
@@ -157,8 +161,18 @@ void loop()
       focuserMotor.step( -steps, timePerStep );
       digitalWrite( LED_BUILTIN, LOW );
       Serial.println( POS + String( focuserMotor.getPos() ) );
+    } else if( line.startsWith( POS ) ) {
+      String args = getCommandArgs( line );
+      if( args == "GET" ) {
+        Serial.println( POS + String( focuserMotor.getPos() ) );
+      } else if( args == "ZERO" ) {
+        focuserMotor.setZeroPos();
+        Serial.println( POS + String( focuserMotor.getPos() ) );
+      } else {
+        Serial.println( INVALID_ARGS + args );
+      }
     } else {
-      Serial.println( "UNRECOGNIZED COMMAND " + line );
+      Serial.println( UNRECOGNIZED_COMMAND + line );
     }
     line = "";
   }
